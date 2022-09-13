@@ -474,7 +474,7 @@ exports[`modules/manager/bazel/extract extractPackageFile() handle comments and 
 exports[`modules/manager/bazel/extract extractPackageFile() sequential http_archive 1`] = `
 [
   {
-    "currentValue": "refs",
+    "currentValue": "v1.1.2",
     "datasource": "github-tags",
     "depName": "aspect_rules_js",
     "depType": "http_archive",

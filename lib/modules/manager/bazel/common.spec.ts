@@ -46,7 +46,7 @@ describe('modules/manager/bazel/common', () => {
     ).toEqual({
       datasource: 'github-tags',
       repo: 'aspect-build/rules_js',
-      currentValue: 'refs',
+      currentValue: 'v1.1.2',
     });
   });
 
@@ -260,7 +260,7 @@ describe('modules/manager/bazel/common', () => {
         ],
       })
     ).toEqual({
-      currentValue: 'refs',
+      currentValue: 'v1.1.2',
       datasource: 'github-tags',
       depName: 'aspect_rules_js',
       depType: 'http_archive',
