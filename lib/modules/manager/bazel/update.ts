@@ -10,24 +10,6 @@ import type { BazelManagerData } from './types';
 
 const http = new Http('bazel');
 
-function updateWithNewVersion(
-  content: string,
-  currentValue: string,
-  newValue: string
-): string {
-  // istanbul ignore if
-  if (currentValue === newValue) {
-    return content;
-  }
-  const replaceFrom = currentValue.replace(regEx(/^v/), '');
-  const replaceTo = newValue.replace(regEx(/^v/), '');
-  let newContent = content;
-  do {
-    newContent = newContent.replace(replaceFrom, replaceTo);
-  } while (newContent.includes(replaceFrom));
-  return newContent;
-}
-
 function extractUrl(flattened: string): string[] | null {
   const urlMatch = regEx(/url="(.*?)"/).exec(flattened);
   if (!urlMatch) {
@@ -101,16 +83,21 @@ export async function updateDependency({
     logger.debug(
       `bazel.updateDependency(): ${upgrade.newValue ?? upgrade.newDigest}`
     );
+
+    if (!upgrade.managerData?.def) {
+      return null;
+    }
+
     let newDef: string | undefined;
-    if (upgrade.depType === 'container_pull' && upgrade.managerData?.def) {
+
+    if (upgrade.depType === 'container_pull') {
       newDef = upgrade.managerData.def
         .replace(regEx(/(tag\s*=\s*)"[^"]+"/), `$1"${upgrade.newValue}"`)
         .replace(regEx(/(digest\s*=\s*)"[^"]+"/), `$1"${upgrade.newDigest}"`);
     }
     if (
-      (upgrade.depType === 'git_repository' ||
-        upgrade.depType === 'go_repository') &&
-      upgrade.managerData?.def
+      upgrade.depType === 'git_repository' ||
+      upgrade.depType === 'go_repository'
     ) {
       newDef = upgrade.managerData.def
         .replace(regEx(/(tag\s*=\s*)"[^"]+"/), `$1"${upgrade.newValue}"`)
@@ -123,15 +110,27 @@ export async function updateDependency({
       }
     } else if (
       (upgrade.depType === 'http_archive' || upgrade.depType === 'http_file') &&
-      upgrade.managerData?.def &&
       (upgrade.currentValue || upgrade.currentDigest) &&
       (upgrade.newValue ?? upgrade.newDigest)
     ) {
-      newDef = updateWithNewVersion(
-        upgrade.managerData.def,
-        (upgrade.currentValue ?? upgrade.currentDigest)!,
-        (upgrade.newValue ?? upgrade.newDigest)!
-      );
+      let last = (newDef = upgrade.managerData.def);
+
+      // All version/hash/url replacements
+      do {
+        last = newDef;
+
+        if (upgrade.newDigest) {
+          newDef = newDef.replace(
+            upgrade.currentDigest ?? upgrade.currentValue!,
+            upgrade.newDigest
+          );
+        }
+        if (upgrade.currentValue && upgrade.newValue) {
+          newDef = newDef.replace(upgrade.currentValue, upgrade.newValue);
+        }
+      } while (newDef !== last);
+
+      // Known issues with standard
       const massages = {
         'bazel-skylib.': 'bazel_skylib-',
         '/bazel-gazelle/releases/download/0':
@@ -143,6 +142,8 @@ export async function updateDependency({
       for (const [from, to] of Object.entries(massages)) {
         newDef = newDef.replace(from, to);
       }
+
+      // Update hashes
       const urls = extractUrls(newDef);
       if (!urls?.length) {
         logger.debug({ newDef }, 'urls is empty');
@@ -162,17 +163,7 @@ export async function updateDependency({
       return null;
     }
 
-    let existingRegExStr = `(?:maybe\\s*\\(\\s*)?${upgrade.depType}(?:\\(|,)[^\\)]+name\\s*=\\s*"${upgrade.depName}"(.*\\n)+?\\s*\\)`;
-    if (newDef.endsWith('\n')) {
-      existingRegExStr += '\n';
-    }
-    const existingDef = regEx(existingRegExStr);
-    // istanbul ignore if
-    if (!existingDef.test(fileContent)) {
-      logger.debug('Cannot match existing string');
-      return null;
-    }
-    return fileContent.replace(existingDef, newDef);
+    return fileContent.replace(upgrade.managerData.def, newDef);
   } catch (err) /* istanbul ignore next */ {
     logger.debug({ err }, 'Error setting new bazel WORKSPACE version');
     return null;

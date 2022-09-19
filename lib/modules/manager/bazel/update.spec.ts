@@ -506,7 +506,6 @@ describe('modules/manager/bazel/update', () => {
       .replace(currentValue1, newValue1)
       .replace(inputHash1, outputHash1);
 
-    // FAIL: duplicates the first http_archive ("aspect_rules_js")
     const res = await updateDependency({
       fileContent: input,
       upgrade: upgrade1,
